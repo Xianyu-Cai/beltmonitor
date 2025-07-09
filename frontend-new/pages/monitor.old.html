@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>监控大屏</title>
+    <link rel="stylesheet" href="/stylesheets/style.css">
+    <link rel="shortcut icon" href="/images/single_logo.png" type="image/png">
+    <script src="/hls.min.js"></script>
+    <script src="/DPlayer.min.js"></script>
+</head>
+
+<body class="bg-base-300">
+    <div class="container p-4 mx-auto bg-base-300 w-screen h-screen">
+        <!-- 网格显示9个播放窗口 -->
+        <div id="screen" class="grid grid-cols-3 gap-1">
+
+        </div>
+
+        <!-- 画面布局切换按钮组 -->
+        <div class="flex justify-center my-2">
+            <div class="join">
+                <button class="join-item btn btn-active" id="grid-btn-1" onclick="changeGrid(1)">1x1</button>
+                <button class="join-item btn" id="grid-btn-2" onclick="changeGrid(2)">2x2</button>
+                <button class="join-item btn" id="grid-btn-3" onclick="changeGrid(3)">3x3</button>
+                <button class="join-item btn" id="grid-btn-4" onclick="changeGrid(4)">4x4</button>
+            </div>
+        </div>
+
+        <!-- 分页导航 -->
+        <div id="pagination" class="flex justify-center my-4" hidden>
+            <div class="join">
+                <a href="#1" class="join-item btn btn-active" onclick="changePage(1)">1</a>
+            </div>
+        </div>
+
+        <div class="grid-cols-1 grid-cols-2 grid-cols-3 grid-cols-4" hidden></div>
+
+        <!-- Dashboard跳转按钮 -->
+        <div class="flex justify-end">
+            <a href="/Dashboard/" class="btn">Dashboard</a>
+        </div>
+
+        <script src="/Monitor.js"></script>
+    </div>
+</body>
+
+</html>

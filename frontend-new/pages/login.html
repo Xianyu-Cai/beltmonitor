@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-cn" data-theme="belt-monitor">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <link rel="stylesheet" href="/stylesheets/style.css">
+    <link rel="shortcut icon" href="/images/single_logo.png" type="image/png">
+</head>
+
+<body>
+    <div class="flex justify-center items-center h-screen">
+        <div class="card card-xl card-side w-3xl bg-base-200 shadow-xl backdrop-blur-sm">
+            <div class="card-body flex flex-row">
+                <h2 class="card-title">登录</h2>
+                <div class="flex flex-col space-y-4 p-8 w-full">
+                    <!-- 用户名输入框 -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                    fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                                账号
+                            </span>
+                        </label>
+                        <input type="text" placeholder="请输入账号" class="input input-bordered w-full" />
+                    </div>
+
+                    <!-- 密码输入框 -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                    fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                                密码
+                            </span>
+                        </label>
+                        <input type="password" placeholder="请输入密码" class="input input-bordered w-full" />
+                    </div>
+                    <!-- 错误提示 -->
+                    <span id="error-message" class="text-sm text-error text-center h-6"></span>
+                    <!-- 登录按钮 -->
+                    <div class="form-control mt-2 flex justify-center">
+                        <button class="btn btn-primary w-1/2">
+                            <span id="login-loading" class="loading loading-bars text-secondary" hidden></span>
+                            <span id="login-text">登录</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/login.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,9 @@
+{
+    "search.followSymlinks": false,
+    "github.copilot.chat.codeGeneration.instructions": [
+        {
+            "file": "./.vscode/daisyui.md"
+        }
+    ],
+    "postman.settings.dotenv-detection-notification-visibility": false
+}

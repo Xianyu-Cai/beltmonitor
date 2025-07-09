@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "module": "commonjs", // 使用 CommonJS 模块
+    "declaration": true, // 生成 .d.ts 声明文件
+    "removeComments": true, // 移除注释
+    "emitDecoratorMetadata": true, // 装饰器元数据支持
+    "experimentalDecorators": true, // 启用实验性装饰器支持
+    "allowSyntheticDefaultImports": true, // 允许默认导入
+    "target": "es2017", // 编译目标为 ES2017
+    "sourceMap": true, // 生成 source map 文件
+    "outDir": "./dist", // 编译输出目录
+    "baseUrl": "./", // 项目根目录
+    "incremental": true, // 启用增量编译
+    "skipLibCheck": true, // 跳过库类型检查
+    "strictNullChecks": true, // 严格的 null 检查
+    "noImplicitAny": true, // 禁止隐式 any 类型
+    "strictBindCallApply": true, // 严格检查 bind/call/apply
+    "forceConsistentCasingInFileNames": true, // 强制文件名一致性
+    "noFallthroughCasesInSwitch": true, // 禁止 switch 的 fallthrough 情况
+    "esModuleInterop": true, // 允许 ES 模块和 CommonJS 模块互操作
+    "downlevelIteration": true, // 启用迭代器的向下兼容支持
+    "paths": { // 配置路径别名
+      "src/*": ["./src/*"]
+    }
+  },
+  "exclude": [
+    "node_modules", // 排除 node_modules
+    "dist" // 排除输出目录
+  ],
+  "include": [
+    "src/**/*.ts" // 包含所有 src 目录下的 TypeScript 文件
+  ]
+}

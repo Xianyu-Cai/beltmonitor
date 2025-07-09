@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘</title>
+    <link rel="stylesheet" href="/stylesheets/style.css">
+    <link rel="shortcut icon" href="/images/single_logo.png" type="image/png">
+    <script type="module" src="/Cally.js"></script>
+    <script src="/hls.min.js"></script>
+    <script src="/DPlayer.min.js"></script>
+</head>
+
+<body class="bg-base-300 min-w-screen min-h-screen flex flex-col">
+    <div class="flex w-screen">
+        <div class=" flex grow rounded-lg p-2 bg-base-100 shadow-md m-2">
+            <div class="navbar-start">
+                <a class="btn btn-ghost text-xl" href="/Monitor/">返回监控大屏</a>
+            </div>
+            <div class="navbar-center">
+                <span class="text-xl">MPS-矿联输送感知与流控系统</span>
+            </div>
+            <div class="navbar-end">
+                <div class="dropdown dropdown-end">
+                    <span tabindex="0" role="button" class="btn btn-ghost" id="UserName-Text"></span>
+                    <ul tabindex="0"
+                        class="menu menu-sm dropdown-content bg-base-100 rounded-box z-1 mt-3 w-52 p-2 shadow">
+                        <li onclick="showUserInfo()">
+                            <a class="justify-between">
+                                个人信息
+                            </a>
+                        </li>
+                        <li onclick="logout()"><a>退出登录</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="flex grow">
+        <div class="p-2 m-2 shadow-md bg-base-100 rounded-lg">
+            <ul class="menu menu-lg w-48">
+                <h2 class="menu-title">菜单</h2>
+                <li onclick="changePanel('s')"><a href="#S">统计面板</a></li>
+                <li onclick="changePanel('w')"><a href="#W">异常报警 <div class="badge badge-info" id="pend"></div></a></li>
+                <li id="AdminPanel">
+                    <details open>
+                        <summary>系统管理</summary>
+                        <ul>
+                            <li><a href="#C" onclick="changePanel('c')">摄像头管理</a></li>
+                            <!-- <li><a href="#R">规则配置</a></li> -->
+                            <li><a href="#O" onclick="changePanel('o')">系统用户管理</a></li>
+                            <li><a href="#A" onclick="changePanel('a')">AI参数配置</a></li>
+                        </ul>
+                    </details>
+                </li>
+            </ul>
+        </div>
+        <div class="grow p-4 flex">
+            <div id="s-panel" class="grow shadow-md bg-base-200 rounded-lg p-4 dash-panel">
+                <div class="breadcrumbs text-sm">
+                    <ul>
+                        <li>仪表盘</li>
+                        <li>统计面板</li>
+                    </ul>
+                </div>
+                <div class="flex flex-row flex-wrap gap-4">
+                    <div id="greeting" class="card bg-base-100 shadow-md h-fit p-4 text-xl"></div>
+                    <div id="c-time" class="card bg-base-100 shadow-md h-fit p-4 text-xl"></div>
+                    <div class="w-full"></div>
+
+                    <div class="card bg-base-100 shadow-md h-fit p-4 text-xl">
+                        <h2 class="text-2xl font-semibold mb-2">摄像头统计</h2>
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat-figure">
+                                    <div aria-label="success" class="status status-success status-xl"></div>
+                                </div>
+                                <div class="stat-title">在线摄像头数量</div>
+                                <div class="stat-value" id="OnlineCamera">13</div>
+                                <div class="stat-desc" id="OnlineCameraTime"></div>
+                            </div>
+
+                            <div class="stat">
+                                <div class="stat-figure text-secondary">
+                                    <div aria-label="success" class="status status-error status-xl"></div>
+                                </div>
+                                <div class="stat-title">离线摄像头数量</div>
+                                <div class="stat-value" id="OfflineCamera"></div>
+                                <div class="stat-desc" id="OfflineCameraTime"></div>
+                            </div>
+
+                            <div class="stat">
+                                <div class="stat-figure text-secondary">
+                                    <div aria-label="success" class="status status-secondary status-xl"></div>
+                                </div>
+                                <div class="stat-title">摄像头总数</div>
+                                <div class="stat-value" id="TotalCamera"></div>
+                                <div class="stat-desc" id="TotalCameraTime"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card bg-base-100 shadow-md h-fit p-4 text-xl">
+                        <h2 class="text-2xl font-semibold mb-2">报警事件统计</h2>
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat-figure">
+                                    <div aria-label="success" class="status status-primary status-xl"></div>
+                                </div>
+                                <div class="stat-title">总事件数</div>
+                                <div class="stat-value" id="TotalEvents">13</div>
+                                <div class="stat-desc" id="TotalEventsTime"></div>
+                            </div>
+
+                            <div class="stat">
+                                <div class="stat-figure text-secondary">
+                                    <div aria-label="success" class="status status-success status-xl"></div>
+                                </div>
+                                <div class="stat-title">已处理事件</div>
+                                <div class="stat-value" id="ResolvedEvents"></div>
+                                <div class="stat-desc" id="ResolvedEventsTime"></div>
+                            </div>
+
+                            <div class="stat">
+                                <div class="stat-figure text-secondary">
+                                    <div aria-label="success" class="status status-warning status-xl"></div>
+                                </div>
+                                <div class="stat-title">未处理事件</div>
+                                <div class="stat-value" id="UnresolvedEvents"></div>
+                                <div class="stat-desc" id="UnresolvedEventsTime"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card bg-base-100 shadow-md h-fit p-4 text-xl">
+                        <h2 class="text-2xl font-semibold mb-2">报警规则统计</h2>
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat-figure">
+                                    <div aria-label="success" class="status status-neutral status-xl"></div>
+                                </div>
+                                <div class="stat-title">规则总数</div>
+                                <div class="stat-value" id="TotalRules">13</div>
+                                <div class="stat-desc" id="TotalRulesTime"></div>
+                            </div>
+
+                            <div class="stat">
+                                <div class="stat-figure text-secondary">
+                                    <div aria-label="success" class="status status-success status-xl"></div>
+                                </div>
+                                <div class="stat-title">启用数</div>
+                                <div class="stat-value" id="ActiveRules"></div>
+                                <div class="stat-desc" id="ActiveRulesTime"></div>
+                            </div>
+
+                            <div class="stat">
+                                <div class="stat-figure text-secondary">
+                                    <div aria-label="success" class="status status-info status-xl"></div>
+                                </div>
+                                <div class="stat-title">未启用数</div>
+                                <div class="stat-value" id="InactiveRules"></div>
+                                <div class="stat-desc" id="InactiveRulesTime"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full"></div>
+                    <div class="card bg-base-100 shadow-md h-fit p-4 text-xl">
+                        <h3>状态监测</h3>
+                        <div class="flex flex-row">
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="card bg-base-100 shadow-md h-fit p-4">
+                                    人员
+                                    <div><canvas id="chart-1" width="590px" height="300px"></canvas></div>
+                                </div>
+                                <div class="card bg-base-100 shadow-md h-fit p-4">
+                                    烟雾
+                                    <div><canvas id="chart-2" width="590px" height="300px"></canvas></div>
+                                </div>
+                                <div class="card bg-base-100 shadow-md h-fit p-4">
+                                    偏移
+                                    <div><canvas id="chart-3" width="590px" height="300px"></canvas></div>
+                                </div>
+                                <div class="card bg-base-100 shadow-md h-fit p-4">
+                                    大块
+                                    <div><canvas id="chart-4" width="590px" height="300px"></canvas></div>
+                                </div>
+                                <div class="card bg-base-100 shadow-md h-fit p-4">
+                                    异物
+                                    <div><canvas id="chart-5" width="590px" height="300px"></canvas></div>
+                                </div>
+                                <div class="card bg-base-100 shadow-md h-fit p-4">
+                                    煤量
+                                    <select id="cq-select" class="select" onchange="showCameraCoalQuantity(this.value)">
+
+                                    </select>
+                                    <div class="flex flex-row items-center gap-4">
+                                        当前煤量
+                                        <div id="cq"
+                                            class="radial-progress bg-primary text-primary-content border-primary border-4"
+                                            style="--value:60;" role="progressbar">
+                                            70%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- <div class="card bg-base-200 shadow-md overflow-y-scroll ml-2 w-56">
+                                <ul>
+                                    <li>
+                                        <input type="checkbox" checked="checked" class="checkbox" />
+                                        摄像头1
+                                    </li>
+                                    <li>
+                                        <input type="checkbox" checked="checked" class="checkbox" />
+                                        摄像头2
+                                    </li>
+                                    <li>
+                                        <input type="checkbox" checked="checked" class="checkbox" />
+                                        摄像头3
+                                    </li>
+                                    <li>
+                                        <input type="checkbox" checked="checked" class="checkbox" />
+                                        摄像头4
+                                    </li>
+                                </ul>
+                            </div> -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="w-panel" class="grow shadow-md bg-base-200 rounded-lg p-4 flex flex-col dash-panel" hidden>
+                <div class="breadcrumbs text-sm">
+                    <ul>
+                        <li>仪表盘</li>
+                        <li>异常报警</li>
+                    </ul>
+                </div>
+                <fieldset
+                    class="fieldset w-full bg-base-200 border border-base-300 p-4 rounded-box flex flex-row gap-2 items-center">
+                    <legend class="fieldset-legend text-xl">异常报警事件查询</legend>
+                    <select class="select max-[]: w-36" title="报警类型" id="AlarmSearchType">
+                        <option value="empty" disabled selected>报警类型</option>
+                        <option value="human">人员</option>
+                        <option value="smoke">烟雾</option>
+                        <option value="offset">偏移</option>
+                        <option value="shape">大块</option>
+                        <option value="foreign">异物</option>
+                        <option value="quantity">煤量</option>
+                    </select>
+                    <select class="select min-[]: w-96" title="报警源摄像头名称" id="AlarmSearchCameraName">
+                        <option value="empty" disabled selected>报警源摄像头名称</option>
+                    </select>
+                    <select class="select w-32" title="状态" id="AlarmSearchStatus">
+                        <option value="empty" disabled selected>状态</option>
+                        <option value="resolved">已处理</option>
+                        <option value="false">未处理</option>
+                    </select>
+                    <span class="text-lg">报警时间</span>
+                    <div class="join w-xl">
+                        <button popovertarget="cally-popover1" class="input input-border join-item" id="cally1"
+                            style="anchor-name:--cally1">开始时间</button>
+                        <button popovertarget="cally-popover2" class="input input-border join-item" id="cally2"
+                            style="anchor-name:--cally2">结束时间</button>
+                    </div>
+                    <div popover id="cally-popover1" class="dropdown bg-base-100 rounded-box shadow-lg"
+                        style="position-anchor:--cally1">
+                        <calendar-date class="cally"
+                            onchange="{document.getElementById('cally1').innerText=this.value}">
+                            <svg aria-label="Previous" class="fill-current size-4" slot="previous"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                <path d="M15.75 19.5 8.25 12l7.5-7.5"></path>
+                            </svg>
+                            <svg aria-label="Next" class="fill-current size-4" slot="next"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                <path d="m8.25 4.5 7.5 7.5-7.5 7.5"></path>
+                            </svg>
+                            <calendar-month></calendar-month>
+                        </calendar-date>
+                    </div>
+                    <div popover id="cally-popover2" class="dropdown bg-base-100 rounded-box shadow-lg"
+                        style="position-anchor:--cally2">
+                        <calendar-date class="cally"
+                            onchange="{document.getElementById('cally2').innerText=this.value}">
+                            <svg aria-label="Previous" class="fill-current size-4" slot="previous"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                <path d="M15.75 19.5 8.25 12l7.5-7.5"></path>
+                            </svg>
+                            <svg aria-label="Next" class="fill-current size-4" slot="next"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                <path d="m8.25 4.5 7.5 7.5-7.5 7.5"></path>
+                            </svg>
+                            <calendar-month></calendar-month>
+                        </calendar-date>
+                    </div>
+                    <div class="grow"></div>
+                    <input type="submit" value="查询" class="btn btn-info" onclick="searchWithCondition()"></input>
+                    <input type="reset" class="btn btn-ghost text-info" onclick="resetSearch()"></input>
+                    <button class="btn btn-success" onclick="ResolveALL();">一键处理</button>
+                </fieldset>
+                <div class="flex flex-row grow">
+                    <!-- <ul class="steps steps-vertical h-fit" id="WarningIDTree">
+                        <li class="step step-netural" data-content="ID">时间</li>
+                        <li class="step step-success" data-content="1">1970-01-01 00:00:00</li>
+                    </ul> -->
+                    <div class="flex flex-col grow">
+                        <div class="h-4"></div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <ul class="steps steps-vertical">
+                                            <li class="step step-netural" data-content="ID">时间</li>
+                                        </ul>
+                                    </th>
+                                    <th>报警类型</th>
+                                    <th>报警源摄像头</th>
+                                    <th>报警状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="WarningInfoTable">
+                                <tr>
+                                    <td>人员</td>
+                                    <td>摄像头1</td>
+                                    <td>
+                                        <div class="badge badge-success">已处理</div>
+                                    </td>
+                                    <td><button class="btn btn-ghost">查看</button></td>
+                                </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div id="c-panel" class="grow shadow-md bg-base-200 rounded-lg p-4 dash-panel" hidden>
+                <div class="breadcrumbs text-sm">
+                    <ul>
+                        <li>仪表盘</li>
+                        <li>系统管理</li>
+                        <li>摄像头管理</li>
+                    </ul>
+                </div>
+                <div class="flex flex-row">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">请选择要配置的摄像头</legend>
+                        <select class="select w-72" id="camera-cfg-select" onchange="selectCamera(this.value)">
+                            <option disabled selected>未选择</option>
+                        </select>
+                        <span class="fieldset-label">或者单击右侧按钮添加</span>
+                    </fieldset>
+                    <div class="grow"></div>
+                    <div class="flex flex-row gap-2">
+                        <button class="btn btn-primary" onclick="addCamera()">添加摄像头</button>
+                        <button class="btn btn-error" id="camera-cfg-delete" hidden
+                            onclick="deleteCamera()">删除摄像头</button>
+                    </div>
+                </div>
+                <fieldset id="camera-cfg-panel"
+                    class="fieldset bg-base-200 border border-base-300 p-4 rounded-box w-full" data-current-id="0"
+                    hidden>
+                    <legend id="camera-cfg-title" class="fieldset-legend">配置摄像头</legend>
+
+                    <label id="camera-cfg-current-id-label" class="fieldset-label">摄像头ID</label>
+                    <input id="camera-cfg-current-id" type="text" class="input" placeholder="id" disabled />
+
+                    <label class="fieldset-label">摄像头名称</label>
+                    <input id="camera-cfg-current-name" type="text" class="input" placeholder="请输入摄像头名称" />
+
+                    <label class="fieldset-label">摄像头型号</label>
+                    <input id="camera-cfg-current-type" type="text" class="input" placeholder="请输入摄像头型号" />
+
+                    <label class="fieldset-label">摄像头数据源地址</label>
+                    <label class="input w-full">
+                        <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none"
+                                stroke="currentColor">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </g>
+                        </svg>
+                        rtsp://
+                        <input id="camera-cfg-current-url" type="text" class="grow" placeholder="请输入摄像数据源rtsp流地址" />
+                    </label>
+
+                    <label class="fieldset-label">HLS 直播流地址</label>
+                    <label class="input w-full flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-[1em] opacity-50">
+                            <path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
+                        </svg>
+                        <input id="camera-cfg-current-hls-url" type="text" class="grow" placeholder="HLS 直播流地址 (通常自动生成)" />
+                    </label>
+
+                    <fieldset class="fieldset bg-base-100 border border-base-300 p-4 rounded-box flex flex-row"
+                        id="camera-cfg-rules">
+                        <legend class="fieldset-legend">摄像头规则</legend>
+                        <input id="camera-cfg-rule-${id}" type="checkbox"
+                            class="toggle toggle-primary toggle-secondary toggle-accent toggle-neutral toggle-error toggle-info toggle-success toggle-warning"
+                            hidden />
+                    </fieldset>
+
+
+                    <div class="flex flex-row justify-center gap-2">
+                        <button id="camera-cfg-save-btn" class="btn btn-success gap-2" onclick="saveCameraCfg()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 3v16a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2H7a2 2 0 00-2 2z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 7h6M9 11h6M9 15h6" />
+                            </svg>
+                            保存修改
+                        </button>
+                        <button id="camera-cfg-add-btn" class="btn btn-primary gap-2" onclick="addCameraCfg()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4" />
+                            </svg>
+                            确认添加
+                        </button>
+                        <button id="camera-cfg-cancel-btn" class="btn btn-error gap-2" onclick="cancelCameraCfg()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            取消添加
+                        </button>
+                    </div>
+                </fieldset>
+            </div>
+            <div id="o-panel" class="grow shadow-md bg-base-200 rounded-lg p-4 dash-panel" hidden>
+                <div class="breadcrumbs text-sm">
+                    <ul>
+                        <li>仪表盘</li>
+                        <li>系统管理</li>
+                        <li>系统用户管理</li>
+                    </ul>
+                </div>
+                <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
+                    <table class="table">
+                        <!-- head -->
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>账号</th>
+                                <th>密码</th>
+                                <th>用户名</th>
+                                <th>角色</th>
+                                <th>电话</th>
+                                <th>邮箱</th>
+                                <th>操作
+                                    <button class="btn btn-ghost btn-sm" onclick="addUser()">添加用户</button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-list">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="a-panel" class="grow shadow-md bg-base-200 rounded-lg p-4 dash-panel" hidden>
+                <div class="breadcrumbs text-sm">
+                    <ul>
+                        <li>仪表盘</li>
+                        <li>系统管理</li>
+                        <li>AI参数配置</li>
+                    </ul>
+                </div>
+                <div class="flex flex-row">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">请选择要配置的摄像头</legend>
+                        <select class="select w-72" id="camera-ai-cfg-select" onchange="selectCameraAI(this.value)">
+                            <option disabled selected>未选择</option>
+                        </select>
+                    </fieldset>
+                </div>
+                <fieldset id="camera-ai-cfg-panel"
+                    class="fieldset bg-base-200 border border-base-300 p-4 rounded-box w-full flex flex-row gap-2"
+                    hidden>
+                    <legend id="camera-ai-cfg-title" class="fieldset-legend">摄像头智能分析参数设置</legend>
+                    <div class="tabs tabs-lift grow">
+                        <input type="radio" name="my_tabs_6" class="tab" aria-label="当前画面预览" checked="checked" />
+                        <div class="tab-content bg-base-100 border-base-300 p-4 h-fit"
+                            style="height: fit-content !important;">
+                            <div id="ai-cfg-live"></div>
+                        </div>
+
+                        <input type="radio" name="my_tabs_6" class="tab" aria-label="截图区域标定" />
+                        <div class="tab-content bg-base-100 border-base-300 p-4 h-fit"
+                            style="height: fit-content !important;">
+                            <canvas id="sign-area" class="border-info rounded-2xl"></canvas>
+                            <button class="btn" onclick="capture()">重新捕获</button>
+                        </div>
+                    </div>
+                    <div class="w-2xl flex flex-col gap-4">
+                        <fieldset class="fieldset flex flex-col gap-2">
+                            <legend class="fieldset-legend">设置识别区域</legend>
+                            <div class="flex flex-row gap-4">
+                                <div id="polygon-point-list"></div>
+                                <button class="btn btn-accent w-32" onclick="startPolygonDrawing()">绘制识别区域</button>
+                                <button class="btn btn-neutral w-32" onclick="cancelDrawing()">取消绘制</button>
+                            </div>
+                            <div class="join">
+                                <input id="ai-cfg-scale" class="input join-item" placeholder="标定或手动输入比例" />
+                                <button class="btn btn-info join-item" onclick="startLineDrawing()">标定识别比例</button>
+                            </div>
+                            <p class="fieldset-label">请输入识别比例或绘制两条线段（远，近）以自动计算比例</p>
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">烟雾阈值</legend>
+                            <input type="text" id="ai-cfg-smoke-threshold" class="input" placeholder="请输入烟雾阈值" />
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">大块比例(1~100)</legend>
+                            <input type="text" id="ai-cfg-large-threshold" class="input" placeholder="请输入大块比例" />
+                        </fieldset>
+                        <button class="btn btn-success w-32" onclick="SaveAIConfig()">保存</button>
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+    </div>
+    </div>
+    <div class="badge badge-success badge-error step-secondary step-info step-success step-warning step-error step-accent"
+        hidden></div>
+    <dialog id="ShowWarningImg" class="modal">
+        <div class="modal-box">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            </form>
+            <img id="WarningImg" src="" alt="">
+        </div>
+    </dialog>
+    <dialog id="CurrentUserModal" class="modal">
+        <div class="modal-box w-full max-w-md">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            </form>
+            <h3 class="font-bold text-lg mb-4">修改个人信息</h3>
+            <form id="user-info-form" class="flex flex-col gap-4">
+                <label class="fieldset-label" for="user-username">用户名</label>
+                <input id="user-username" type="text" class="input" placeholder="用户名" />
+
+                <label class="fieldset-label" for="user-email">邮箱</label>
+                <input id="user-email" type="email" class="input" placeholder="邮箱" />
+
+                <label class="fieldset-label" for="user-tel">电话</label>
+                <input id="user-tel" class="input" placeholder="电话" />
+
+                <label class="fieldset-label" for="user-password">新密码</label>
+                <input id="user-password" type="password" class="input" placeholder="不修改请留空"
+                    autocomplete="new-password" />
+
+                <label class="fieldset-label" for="user-password-confirm">确认新密码</label>
+                <input id="user-password-confirm" type="password" class="input" placeholder="不修改请留空"
+                    autocomplete="new-password" />
+
+                <div class="flex flex-row gap-2 justify-end mt-2">
+                    <button type="button" class="btn btn-success" onclick="saveUserInfo()">保存</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+    <script src="/chartjs.min.js"></script>
+    <script src="/ThisChart.js"></script>
+    <script src="/Dashboard.js"></script>
+</body>
+
+</html>

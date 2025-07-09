@@ -1,0 +1,44 @@
+# Node.js 忽略规则
+
+# node_modules 目录，包含所有安装的依赖
+node_modules/
+
+# 日志文件
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# 依赖锁文件（根据使用的包管理工具选择）
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 环境变量文件
+# .env
+# .env.local
+# .env.*.local
+
+# 构建输出目录
+# dist/
+# build/
+
+# 类型声明文件（如果使用 TypeScript）
+# *.d.ts
+
+# 本地 IDE 配置文件（例如 VSCode）
+# .idea/
+# .vscode/
+
+# MacOS 系统文件
+.DS_Store
+
+# Windows 系统文件
+# Thumbs.db
+
+# 临时文件
+# *.swp
+# *~
+
+# 其他自动生成的文件（例如 Babel、TypeScript 输出等）
+# /*.log
+# *.log.*

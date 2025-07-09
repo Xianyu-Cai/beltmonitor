@@ -1,0 +1,27 @@
+{
+  "name": "BeltConveyorMonitor",
+  "version": "1.0.0",
+  "description": "Belt Conveyor Monitor Application",
+  "main": "./main.ts",
+  "scripts": {
+    "start:backend": "cd backend && npm run start",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start:frontend": "cd frontend && npm run start",
+    "start": "ts-node src/main.ts",
+    "package": "electron-packager . BeltConveyorMonitor --platform=win32 --arch=x64 --ignore='^/frontend/node_modules'"
+  },
+  "devDependencies": {
+    "concurrently": "^6.0.0",
+    "electron": "^23.0.0",
+    "electron-packager": "^15.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^4.5.0",
+    "wait-on": "^5.0.1"
+  },
+  "dependencies": {
+    "BeltConveyorMonitor": "file:",
+    "express": "^4.17.1",
+    "react": "^18.0.0"
+  }
+}
