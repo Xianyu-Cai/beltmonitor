@@ -10,7 +10,7 @@ log = logging.getLogger("ModbusClient")
 log.setLevel(logging.INFO)
 
 class ModbusClient:
-    def __init__(self, host="169.254.43.168", port=502, unit=1):
+    def __init__(self, host="169.254.43.168", port=502, unit=1, initial_config=None):
         """
         初始化 Modbus TCP 客户端
         
@@ -18,6 +18,7 @@ class ModbusClient:
             host (str): Modbus 服务器主机名或 IP 地址
             port (int): Modbus 服务器端口号
             unit (int): Modbus 从站单元标识符
+            initial_config (dict): 初始检测配置
         """
         self.host = host
         self.port = port
@@ -25,6 +26,12 @@ class ModbusClient:
         self.client = None
         self.connected = False
         self.lock = threading.Lock()
+        
+        # 保存初始配置
+        self.initial_config = initial_config or {}
+        
+        # 上次报警使能寄存器的值
+        self.last_alarm_enable_value = None
         
         # 报警状态跟踪
         self.alarm_states = {
@@ -300,3 +307,54 @@ class ModbusClient:
         except Exception as e:
             log.error(f"[Modbus错误] 监控寄存器时发生异常: {str(e)}")
             return None
+
+    def get_alarm_enable_status(self):
+        """
+        获取报警使能状态
+        
+        Returns:
+            dict: 检测配置字典
+        """
+        enable_value = self.read_register(self.alarm_enable_register)
+        if enable_value is not None:
+            self.last_alarm_enable_value = enable_value
+            return {
+                "大块检测": bool(enable_value & 0x01),
+                "异物检测": bool(enable_value & 0x02),
+                "人员越界检测": bool(enable_value & 0x04),
+                "跑偏检测": bool(enable_value & 0x08)
+            }
+        return None
+
+    def check_detection_change(self):
+        """
+        检查检测配置是否有变化
+        
+        Returns:
+            dict or None: 如果有变化，返回新的配置字典；否则返回None
+        """
+        current_value = self.read_register(self.alarm_enable_register)
+        if current_value is not None and current_value != self.last_alarm_enable_value:
+            self.last_alarm_enable_value = current_value
+            return {
+                "大块检测": bool(current_value & 0x01),
+                "异物检测": bool(current_value & 0x02),
+                "人员越界检测": bool(current_value & 0x04),
+                "跑偏检测": bool(current_value & 0x08)
+            }
+        return None
+
+    def is_detection_enabled(self, detection_mask):
+        """
+        检查特定检测类型是否启用
+        
+        Args:
+            detection_mask (int): 检测类型的位掩码
+            
+        Returns:
+            bool: 是否启用
+        """
+        enable_value = self.read_register(self.alarm_enable_register)
+        if enable_value is not None:
+            return bool(enable_value & detection_mask)
+        return True  # 如果无法读取，默认启用

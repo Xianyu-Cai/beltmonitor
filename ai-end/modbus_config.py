@@ -33,3 +33,14 @@ ALARM_RULE_MAPPING = {
 # 连接重试配置
 MAX_RECONNECT_ATTEMPTS = 10   # 最大重连尝试次数
 MAX_RECONNECT_INTERVAL = 60   # 最大重连间隔（秒）
+
+# 初始检测配置
+INITIAL_DETECTION_CONFIG = {
+    "大块检测": True,
+    "异物检测": True,
+    "人员越界检测": True,
+    "跑偏检测": True
+}
+
+# 初始报警使能值
+ALARM_ENABLE_INITIAL_VALUE = 0x0F  # 默认启用所有检测
