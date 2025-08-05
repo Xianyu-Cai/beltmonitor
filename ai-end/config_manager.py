@@ -25,6 +25,7 @@ class ConfigManager:
         parser.add_argument('--cameraid', type=int, help="Camera ID for event reporting")
         parser.add_argument('--base_url', type=str, default="http://localhost:8080", help="Base URL for API endpoints")
         parser.add_argument('--cooldown', type=int, default=30, help="Event reporting cooldown period in minutes (default: 30)")
+        parser.add_argument('--detection_interval', type=float, default=1.0, help="Detection interval in seconds (default: 1.0)")
         
         args = parser.parse_args()
         self.camera_id = args.cameraid

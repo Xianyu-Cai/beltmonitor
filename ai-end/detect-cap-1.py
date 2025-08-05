@@ -25,6 +25,9 @@ from alarm_type_mapper import AlarmTypeMapper
 from event_reporter import EventReporter
 from modbus_client import ModbusClient
 
+# 导入WebSocket相关模块
+from ws_producer import detection_producer
+
 # 忽略警告
 warnings.filterwarnings('ignore')
 
@@ -450,7 +453,7 @@ def should_detect_class(cls_id):
 camera_coal_quantities = {}
 
 def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename, class_ids, conf=0.25, 
-                    belt_scale=1.0, person_region=None, smoke_threshold=0.5, camera_id=None, hls_server_actual_port=None):
+                    belt_scale=1.0, person_region=None, smoke_threshold=0.5, camera_id=None, hls_server_actual_port=None, detection_interval=1.0):
     print(f"[DEBUG] predict_realtime called with hls_server_actual_port: {hls_server_actual_port}")
     model = YOLO(model_path)
     valid_classes = list(range(8))  # 8个类别
@@ -460,6 +463,9 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         raise IOError(f"Cannot open RTSP stream {rtsp_url}")
+
+    # 启动WebSocket检测结果生产者
+    detection_producer.start()
 
     # 获取原始视频尺寸
     original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -499,7 +505,7 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
 
     # 添加更多日志输出
     print(f"[预测] 开始实时预测 摄像头ID: {camera_id}, 大块比例阈值: {large_block_ratio}")
-    print(f"[预测] 输出视频分辨率: {target_width}x{target_height}, 帧率: {fps}")
+    print(f"[预测] 输出视频分辨率: {target_width}x{target_height}, 帧率: {fps}, 检测间隔: {detection_interval}秒")
     
     # 检测计数器
     detection_counter = {cls: 0 for cls in range(8)}
@@ -511,6 +517,16 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
     # 初始化当前摄像头的煤量变量
     current_coal_quantity = 0.0
 
+    # 帧率控制变量
+    last_detection_time = time.time()
+    # detection_interval参数已经通过函数参数传入，不需要再从args获取
+    
+    # 缓存检测结果用于锚框停留显示
+    cached_results = []
+    cached_detected_classes = set()
+    last_detection_results_time = 0.0
+    anchor_box_duration = 1.0  # 锚框停留时间（秒）
+    
     try:
         while not exit_event.is_set():
             ret, frame = cap.read()
@@ -522,8 +538,13 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
             frame = cv2.resize(frame, (target_width, target_height))
             
             frame_counter += 1
+            current_time = time.time()
+            
+            # 检查是否应该进行检测（每秒一帧）
+            should_detect = (current_time - last_detection_time) >= detection_interval
+            
             if frame_counter % 100 == 0:
-                print(f"[预测] 已处理 {frame_counter} 帧")
+                print(f"[预测] 已处理 {frame_counter} 帧，检测间隔: {detection_interval}秒")
                 # 每100帧打印当前的检测配置，便于监控
                 # print(f"[预测] 当前检测配置 (cached): {detection_config}") # 打印缓存的配置
                 
@@ -557,158 +578,204 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
             if not working_class_ids:
                 working_class_ids = [0, 1]  # 皮带和煤量
             
-            # 执行检测（只检测当前启用的类别）
-            results = model.predict(source=frame, imgsz=img_size, conf=conf, classes=working_class_ids, save=False)
-            
-            # 记录当前帧检测到的所有类别
-            detected_classes_set = set()
-            
-            area_pulley, area_coal = 0, 0
-            H, W = 0, 0
-
-            # 皮带尺寸检测和煤量计算
-            for result in results:
-                boxes = result.boxes
-                for box in boxes:
-                    cls = int(box.cls[0])
-                    detected_classes_set.add(cls)
-                    
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                    area = (x2 - x1) * (y2 - y1)
-
-                    if cls == 0:  # 皮带
-                        H, W = y2 - y1, x2 - x1
-                        belt_detected = True
-                        avg_H = 0.2 * H + 0.8 * avg_H
-                        avg_W = 0.2 * W + 0.8 * avg_W
-                        area_pulley += area
-                    elif cls == 1:  # 煤量
-                        area_coal += area
-
-            # 计算煤量比例并存储到全局字典
-            if area_pulley > 0:
-                coal_ratio = float(area_coal / area_pulley) * 100  # 转换为百分比
-                # 平滑煤量变化，防止数值跳动
-                if current_coal_quantity == 0:
-                    current_coal_quantity = coal_ratio
-                else:
-                    current_coal_quantity = 0.8 * current_coal_quantity + 0.2 * coal_ratio
+            # 只在满足时间间隔时进行检测
+            if should_detect:
+                # 执行检测（只检测当前启用的类别）
+                results = model.predict(source=frame, imgsz=img_size, conf=conf, classes=working_class_ids, save=False)
                 
-                # 确保煤量值在0-100之间
-                current_coal_quantity = max(0, min(100, current_coal_quantity))
-                
-                # 更新全局字典
+                # 发送检测结果到WebSocket（非阻塞）
                 if camera_id is not None:
-                    camera_coal_quantities[camera_id] = current_coal_quantity
-                    if frame_counter % 100 == 0:
-                        print(f"[煤量] 摄像头{camera_id}当前煤量: {current_coal_quantity:.1f}%")
-            
-            coal_ratio_str = f"{current_coal_quantity:.1f}%" if area_pulley else "N/A"
+                    detection_producer.send_detections(camera_id, results, CLASS_NAMES)
+                
+                # 记录当前帧检测到的所有类别
+                detected_classes_set = set()
+                
+                area_pulley, area_coal = 0, 0
+                H, W = 0, 0
 
-            # 动态阈值计算（基于缩放后的分辨率）
-            if belt_detected and avg_H > 0 and avg_W > 0:
-                belt_area = avg_H * avg_W
-                large_threshold = belt_area * 0.3 * belt_scale
-                width_threshold = avg_W * 0.3
+                # 皮带尺寸检测和煤量计算
+                for result in results:
+                    boxes = result.boxes
+                    if boxes is not None:
+                        for box in boxes:
+                            cls = int(box.cls[0])
+                            detected_classes_set.add(cls)
+                            
+                            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                            area = (x2 - x1) * (y2 - y1)
+
+                            if cls == 0:  # 皮带
+                                H, W = y2 - y1, x2 - x1
+                                belt_detected = True
+                                avg_H = 0.2 * H + 0.8 * avg_H
+                                avg_W = 0.2 * W + 0.8 * avg_W
+                                area_pulley += area
+                            elif cls == 1:  # 煤量
+                                area_coal += area
+
+                # 计算煤量比例并存储到全局字典
+                if area_pulley > 0:
+                    coal_ratio = float(area_coal / area_pulley) * 100  # 转换为百分比
+                    # 平滑煤量变化，防止数值跳动
+                    if current_coal_quantity == 0:
+                        current_coal_quantity = coal_ratio
+                    else:
+                        current_coal_quantity = 0.8 * current_coal_quantity + 0.2 * coal_ratio
+                    
+                    # 确保煤量值在0-100之间
+                    current_coal_quantity = max(0, min(100, current_coal_quantity))
+                    
+                    # 更新全局字典
+                    if camera_id is not None:
+                        camera_coal_quantities[camera_id] = current_coal_quantity
+                        
+                        # 通过Modbus发送煤量数据（连续数据，非报警）
+                        if 'modbus_client' in globals() and modbus_client and modbus_client.connected:
+                            modbus_client.send_coal_quantity(current_coal_quantity)
+                        
+                        if frame_counter % 100 == 0:
+                            print(f"[煤量] 摄像头{camera_id}当前煤量: {current_coal_quantity:.1f}%")
+                
+                coal_ratio_str = f"{current_coal_quantity:.1f}%" if area_pulley else "N/A"
+
+                # 动态阈值计算（基于缩放后的分辨率）
+                if belt_detected and avg_H > 0 and avg_W > 0:
+                    belt_area = avg_H * avg_W
+                    large_threshold = belt_area * 0.3 * belt_scale
+                    width_threshold = avg_W * 0.3
+                else:
+                    large_threshold = 1000
+                    width_threshold = 30
+
+                # 创建渲染帧用于所有显示，包含检测锚框
+                rendered_frame = frame.copy()
+
+                # 绘制检测结果（包括缓存的检测结果）
+                for result in results:
+                    boxes = result.boxes
+                    if boxes is not None:
+                        for box in boxes:
+                            cls = int(box.cls[0])
+                            confidence = float(box.conf[0])
+                            label = CLASS_NAMES.get(cls, "未知")
+
+                            # 只在实际检测时更新计数，不更新缓存结果的计数
+                            if should_detect:
+                                detection_counter[cls] += 1
+                                
+                                # 如果检测到300次，打印一下检测计数
+                                total_detections = sum(detection_counter.values())
+                                if total_detections % 300 == 0:
+                                    print(f"[检测统计] 总计: {total_detections} 次检测")
+                                    for c, count in detection_counter.items():
+                                        if count > 0:
+                                            print(f"  - {CLASS_NAMES.get(c, f'类别{c}')}: {count} 次")
+
+                            # 在渲染帧上绘制检测框（用于所有显示）
+                            rendered_frame = drawer.draw(rendered_frame, box, label, 
+                                              coal_ratio_str if cls == 1 else None, 
+                                              scale_factor=scale_factor)
+                            
+                            # 根据检测类别判断是否需要上报事件
+                            alarm_rule_id = AlarmTypeMapper.get_alarm_rule_id(cls, detected_classes_set)
+                            
+                            # 上报事件逻辑 - 只在实际检测时处理，不处理缓存结果
+                            if alarm_rule_id and cls != 1 and should_detect:  # 只在检测帧处理
+                                alarm_name = AlarmTypeMapper.get_alarm_name(alarm_rule_id)
+                                
+                                # 根据不同类别的特殊处理逻辑
+                                should_report = False
+                                
+                                if cls == 2:  # 大块检测
+                                    # 检查当前是否启用大块检测
+                                    if detection_config["大块检测"]:
+                                        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                                        block_width = x2 - x1
+                                        block_area = (x2 - x1) * (y2 - y1)
+                                        
+                                        # 使用缩放后的图像宽度进行比例计算
+                                        should_report = AlarmTypeMapper.should_report_large_block(
+                                            block_width=block_width,
+                                            image_width=target_width,  # 使用目标宽度而非原始宽度
+                                            threshold_ratio=large_block_ratio
+                                        )
+                                        
+                                        # 打印大块检测信息
+                                        actual_ratio = block_width / target_width
+                                        print(f"[大块检测] 大块宽度: {block_width}, 目标图像宽度: {target_width}, 实际比例: {actual_ratio:.4f}, 阈值: {large_block_ratio}, 是否上报: {should_report}")
+                                
+                                elif cls == 6 and person_region:  # 人员检测
+                                    # 检查当前是否启用人员越界检测
+                                    if detection_config["人员越界检测"]:
+                                        xc = (box.xyxy[0][0] + box.xyxy[0][2]) / 2
+                                        yc = (box.xyxy[0][1] + box.xyxy[0][3]) / 2
+                                        should_report = (person_region[0] <= xc <= person_region[2] and 
+                                                        person_region[1] <= yc <= person_region[3])
+                                    
+                                elif cls == 7:  # 烟雾检测
+                                    should_report = confidence >= smoke_threshold
+                                    
+                                elif cls == 5:  # 异物报警
+                                    # 检查当前是否启用异物检测
+                                    should_report = detection_config["异物检测"]
+                                    
+                                elif cls in [3, 4]:  # 跑偏报警
+                                    # 检查当前是否启用跑偏检测
+                                    if detection_config["跑偏检测"]:
+                                        should_report = not (3 in detected_classes_set and 4 in detected_classes_set)
+                                
+                                # 上报事件，确保传递所有必要参数 - 只在检测帧处理
+                                if should_report:
+                                    try:
+                                        print(f"[检测事件] 类别: {cls}, 报警类型: {alarm_name}, 报警规则ID: {alarm_rule_id}, 置信度: {confidence:.4f}")
+                                        
+                                        # 通过 Modbus 发送报警信号
+                                        if 'modbus_client' in globals():
+                                            modbus_client.send_alarm(alarm_name, confidence, True)
+                                        
+                                        # 通过 HTTP 上报事件 - 使用带边界框的渲染帧
+                                        if 'event_reporter' in globals():
+                                            event_reporter.report_alarm_event(
+                                                camera_id=config_manager.camera_id,
+                                                alarm_type=alarm_name,
+                                                confidence=confidence,
+                                                frame=rendered_frame,  # 使用渲染帧（带边界框）
+                                                alarm_rule_id=alarm_rule_id
+                                            )
+                                    except Exception as e:
+                                        print(f"[错误] 上报事件或发送Modbus信号失败: {str(e)}")
+                                        import traceback
+                                        traceback.print_exc()
+                
+                # 缓存检测结果用于锚框停留显示
+                cached_results = results
+                cached_detected_classes = detected_classes_set.copy()
+                last_detection_results_time = current_time
+                
+                # 更新最后检测时间
+                last_detection_time = current_time
             else:
-                large_threshold = 1000
-                width_threshold = 30
+                # 非检测帧，视频继续更新，锚框延时显示
+                coal_ratio_str = f"{current_coal_quantity:.1f}%" if current_coal_quantity > 0 else "N/A"
+                rendered_frame = frame.copy()  # 始终使用当前视频帧
 
-            # 处理检测结果
-            for result in results:
+            # 始终绘制检测结果（包括缓存的结果）
+            time_since_last_detection = current_time - last_detection_results_time
+            use_cached = (not should_detect) and (time_since_last_detection <= anchor_box_duration) and cached_results
+            
+            current_results = results if should_detect else (cached_results if use_cached else [])
+            current_detected_classes = detected_classes_set if should_detect else (cached_detected_classes if use_cached else set())
+            
+            for result in current_results:
                 boxes = result.boxes
-                for box in boxes:
-                    cls = int(box.cls[0])
-                    confidence = float(box.conf[0])
-                    label = CLASS_NAMES.get(cls, "未知")
-
-                    # 更新检测计数
-                    detection_counter[cls] += 1
-                    
-                    # 如果检测到300次，打印一下检测计数
-                    total_detections = sum(detection_counter.values())
-                    if total_detections % 300 == 0:
-                        print(f"[检测统计] 总计: {total_detections} 次检测")
-                        for c, count in detection_counter.items():
-                            if count > 0:
-                                print(f"  - {CLASS_NAMES.get(c, f'类别{c}')}: {count} 次")
-
-                    # 绘制检测框时传入缩放因子
-                    frame = drawer.draw(frame, box, label, 
-                                      coal_ratio_str if cls == 1 else None, 
-                                      scale_factor=scale_factor)
-                    
-                    # 根据检测类别判断是否需要上报事件
-                    alarm_rule_id = AlarmTypeMapper.get_alarm_rule_id(cls, detected_classes_set)
-                    
-                    # 上报事件逻辑 - 不再对煤量(cls==1)进行上报
-                    if alarm_rule_id and cls != 1:  # 忽略煤量的报警上报
-                        alarm_name = AlarmTypeMapper.get_alarm_name(alarm_rule_id)
-                        
-                        # 根据不同类别的特殊处理逻辑
-                        should_report = False
-                        
-                        if cls == 2:  # 大块检测
-                            # 检查当前是否启用大块检测
-                            if detection_config["大块检测"]:
-                                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                                block_width = x2 - x1
-                                block_area = (x2 - x1) * (y2 - y1)
-                                
-                                # 使用缩放后的图像宽度进行比例计算
-                                should_report = AlarmTypeMapper.should_report_large_block(
-                                    block_width=block_width,
-                                    image_width=target_width,  # 使用目标宽度而非原始宽度
-                                    threshold_ratio=large_block_ratio
-                                )
-                                
-                                # 打印大块检测信息
-                                actual_ratio = block_width / target_width
-                                print(f"[大块检测] 大块宽度: {block_width}, 目标图像宽度: {target_width}, 实际比例: {actual_ratio:.4f}, 阈值: {large_block_ratio}, 是否上报: {should_report}")
-                        
-                        elif cls == 6 and person_region:  # 人员检测
-                            # 检查当前是否启用人员越界检测
-                            if detection_config["人员越界检测"]:
-                                xc = (box.xyxy[0][0] + box.xyxy[0][2]) / 2
-                                yc = (box.xyxy[0][1] + box.xyxy[0][3]) / 2
-                                should_report = (person_region[0] <= xc <= person_region[2] and 
-                                                person_region[1] <= yc <= person_region[3])
-                            
-                        elif cls == 7:  # 烟雾检测
-                            should_report = confidence >= smoke_threshold
-                            
-                        elif cls == 5:  # 异物报警
-                            # 检查当前是否启用异物检测
-                            should_report = detection_config["异物检测"]
-                            
-                        elif cls in [3, 4]:  # 跑偏报警
-                            # 检查当前是否启用跑偏检测
-                            if detection_config["跑偏检测"]:
-                                should_report = not (3 in detected_classes_set and 4 in detected_classes_set)
-                        
-                        # 上报事件，确保传递所有必要参数
-                        if should_report:
-                            try:
-                                print(f"[检测事件] 类别: {cls}, 报警类型: {alarm_name}, 报警规则ID: {alarm_rule_id}, 置信度: {confidence:.4f}")
-                                
-                                # 通过 Modbus 发送报警信号
-                                if 'modbus_client' in globals():
-                                    modbus_client.send_alarm(alarm_name, confidence, True)
-                                
-                                # 通过 HTTP 上报事件
-                                if event_reporter:
-                                    event_reporter.report_alarm_event(
-                                        camera_id=config_manager.camera_id,
-                                        alarm_type=alarm_name,
-                                        confidence=confidence,
-                                        frame=frame,
-                                        alarm_rule_id=alarm_rule_id
-                                    )
-                            except Exception as e:
-                                print(f"[错误] 上报事件或发送Modbus信号失败: {str(e)}")
-                                import traceback
-                                traceback.print_exc()
-
+                if boxes is not None:
+                    for box in boxes:
+                        cls = int(box.cls[0])
+                        label = CLASS_NAMES.get(cls, "未知")
+                        rendered_frame = drawer.draw(rendered_frame, box, label, 
+                                          coal_ratio_str if cls == 1 else None, 
+                                          scale_factor=scale_factor)
+            
             # 显示人员检测区域（如果设置了人员区域，需要根据缩放比例调整）
             if person_region:
                 # 使用已计算的缩放比例调整人员检测区域坐标
@@ -721,14 +788,15 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
                 
                 # 根据缩放因子调整人员检测区域边框粗细
                 region_thickness = max(1, int(2 * scale_factor))
-                cv2.rectangle(frame, 
+                cv2.rectangle(rendered_frame, 
                             (scaled_person_region[0], scaled_person_region[1]),
                             (scaled_person_region[2], scaled_person_region[3]), 
                             (42, 42, 165), region_thickness)
             
+            # 发送带检测锚框的渲染帧到FFmpeg进行HLS流
             try:
                 if ffmpeg_process.stdin:
-                    ffmpeg_process.stdin.write(frame.tobytes())
+                    ffmpeg_process.stdin.write(rendered_frame.tobytes())
                     ffmpeg_process.stdin.flush() # 确保数据被发送
             except BrokenPipeError:
                 print("[错误] FFmpeg进程的管道已损坏。可能已提前退出。停止发送帧。")
@@ -743,6 +811,9 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
     except KeyboardInterrupt:
         print("Interrupted by user.")
     finally:
+        # 停止WebSocket生产者
+        detection_producer.stop()
+        
         # 打印最终检测统计
         print("\n[检测最终统计]")
         print(f"总计处理帧数: {frame_counter}")
@@ -752,7 +823,8 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
                 print(f"  - {CLASS_NAMES.get(cls, f'类别{cls}')}: {count} 次")
                 
         cap.release()
-        ffmpeg_process.stdin.close()
+        if ffmpeg_process.stdin:
+            ffmpeg_process.stdin.close()
         ffmpeg_process.wait()
         
         # 清除所有 Modbus 报警信号
@@ -860,8 +932,7 @@ def main():
         modbus_client = ModbusClient(
             host=MODBUS_HOST, 
             port=MODBUS_PORT, 
-            unit=MODBUS_UNIT,
-            initial_config=INITIAL_DETECTION_CONFIG
+            unit=MODBUS_UNIT
         )
         
         # 尝试连接 Modbus 服务器
@@ -942,7 +1013,8 @@ def main():
             class_ids, 
             args.conf,
             camera_id=args.cameraid,
-            hls_server_actual_port=hls_actual_port # 传递实际的HLS端口
+            hls_server_actual_port=hls_actual_port, # 传递实际的HLS端口
+            detection_interval=args.detection_interval # 传递检测间隔
         )
     finally:
         # 关闭 Modbus 连接

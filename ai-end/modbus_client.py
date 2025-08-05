@@ -55,6 +55,16 @@ class ModbusClient:
         self.last_connection_time = 0
         self.max_reconnect_interval = 60  # 最大重连间隔（秒）
         
+        # 检测配置缓存
+        self.last_config = None
+        self.last_check_time = 0
+        
+        # Modbus位掩码常量
+        self.DETECT_LARGE_CHUNK = 0x01    # bit0 - 大块
+        self.DETECT_FOREIGN_OBJECT = 0x02  # bit1 - 异物
+        self.DETECT_PERSONNEL = 0x04      # bit2 - 人员越界
+        self.DETECT_DEVIATION = 0x08      # bit3 - 跑偏
+        
         log.info(f"[Modbus] 初始化Modbus客户端: {host}:{port}, 单元: {unit}")
     
     def connect(self):
@@ -137,7 +147,7 @@ class ModbusClient:
     
     def write_register(self, address, value):
         """
-        写入单个保持寄存器
+        写入单个保持寄存器（增强错误处理）
         
         Args:
             address (int): 寄存器地址
@@ -154,34 +164,53 @@ class ModbusClient:
                 # 确保值在有效范围内
                 value = max(0, min(value, 65535))
                 
-                result = self.client.write_register(address, value)
-                if hasattr(result, 'isError') and result.isError():
-                    log.error(f"[Modbus错误] 写入寄存器 {address} 失败: {result}")
-                    self.connected = False
-                    return False
-                
-                # 验证写入是否成功
-                verify_result = self.client.read_holding_registers(address, count=1)
-                if hasattr(verify_result, 'isError') and not verify_result.isError():
-                    if verify_result.registers[0] == value:
-                        log.debug(f"[Modbus] 已成功写入寄存器 {address} = {value}")
+                # 重试机制
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        result = self.client.write_register(address, value)
+                        if hasattr(result, 'isError') and result.isError():
+                            if attempt == max_retries - 1:
+                                log.error(f"[Modbus错误] 写入寄存器 {address} 失败: {result}")
+                                self.connected = False
+                                return False
+                            else:
+                                log.warning(f"[Modbus警告] 写入寄存器 {address} 失败，重试 {attempt + 1}/{max_retries}")
+                                time.sleep(0.1 * (attempt + 1))  # 指数退避
+                                continue
+                        
+                        # 验证写入是否成功
+                        verify_result = self.client.read_holding_registers(address, count=1)
+                        if hasattr(verify_result, 'isError') and not verify_result.isError():
+                            if verify_result.registers[0] == value:
+                                log.debug(f"[Modbus] 已成功写入寄存器 {address} = {value}")
+                                return True
+                            else:
+                                log.warning(f"[Modbus警告] 寄存器 {address} 验证失败，期望值={value}, 实际值={verify_result.registers[0]}")
+                                return False
+                        
+                        # 无法验证但写入没有报错
                         return True
-                    else:
-                        log.warning(f"[Modbus警告] 寄存器 {address} 验证失败，期望值={value}, 实际值={verify_result.registers[0]}")
+                        
+                    except ConnectionException as e:
+                        log.error(f"[Modbus错误] 写入寄存器 {address} 时连接异常: {str(e)}")
+                        self.connected = False
+                        if attempt == max_retries - 1:
+                            return False
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                    except ModbusIOException as e:
+                        log.error(f"[Modbus错误] 写入寄存器 {address} 时IO异常: {str(e)}")
+                        if attempt == max_retries - 1:
+                            return False
+                        time.sleep(0.1 * (attempt + 1))
+                        continue
+                    except Exception as e:
+                        log.error(f"[Modbus错误] 写入寄存器 {address} 时发生未知异常: {str(e)}")
                         return False
-                
-                # 无法验证但写入没有报错
-                return True
-                
-            except ConnectionException:
-                log.error(f"[Modbus错误] 写入寄存器 {address} 时连接异常")
-                self.connected = False
-                return False
-            except ModbusIOException as e:
-                log.error(f"[Modbus错误] 写入寄存器 {address} 时IO异常: {str(e)}")
-                return False
+                        
             except Exception as e:
-                log.error(f"[Modbus错误] 写入寄存器 {address} 时发生未知异常: {str(e)}")
+                log.error(f"[Modbus错误] 写入寄存器 {address} 时发生异常: {str(e)}")
                 return False
     
     def read_register(self, address):
@@ -220,7 +249,7 @@ class ModbusClient:
     
     def send_alarm(self, alarm_type, confidence=0.0, active=True):
         """
-        发送报警信号
+        发送报警信号（线程安全）
         
         Args:
             alarm_type (str): 报警类型名称
@@ -234,40 +263,65 @@ class ModbusClient:
             log.warning(f"[Modbus警告] 未知的报警类型: {alarm_type}")
             return False
             
-        # 记录报警状态变化
-        old_state = self.alarm_states.get(alarm_type, False)
-        self.alarm_states[alarm_type] = active
+        # 记录报警状态变化（线程安全）
+        with self.lock:
+            old_state = self.alarm_states.get(alarm_type, False)
+            self.alarm_states[alarm_type] = active
         
         # 获取报警对应的寄存器地址
         register_address = self.alarm_register_addresses[alarm_type]
         
-        # 将bool转换为int值
-        value = 1 if active else 0
-        
-        # 对于煤量报警，使用置信度值 (0-1000)
-        if alarm_type == "煤量报警" and active:
-            value = int(confidence * 1000)
-            log.info(f"[Modbus] 发送煤量报警: 值={value}, 置信度={confidence:.4f}")
+        # 煤量使用实际百分比值，其他报警使用bool值
+        if alarm_type == "煤量报警":
+            # 煤量作为连续数据，不依赖于active状态，直接使用实际百分比
+            value = int(confidence * 100)  # 直接使用百分比值 0-100
+            value = max(0, min(value, 65535))
+            log.info(f"[Modbus] 发送煤量数据: {value}%")
+        else:
+            # 其他报警使用bool值
+            value = 1 if active else 0
         
         # 写入寄存器
         success = self.write_register(register_address, value)
         
         if success:
-            if active and old_state != active:
-                # 报警状态发生变化且为激活状态
-                log.info(f"[Modbus] 已触发报警 {alarm_type}, 状态={active}, 置信度={confidence:.4f}")
-            elif not active and old_state != active:
-                # 报警状态发生变化且为取消状态
-                log.info(f"[Modbus] 已解除报警 {alarm_type}")
+            with self.lock:
+                if active and old_state != active:
+                    # 报警状态发生变化且为激活状态
+                    log.info(f"[Modbus] 已触发报警 {alarm_type}, 状态={active}, 置信度={confidence:.4f}")
+                elif not active and old_state != active:
+                    # 报警状态发生变化且为取消状态
+                    log.info(f"[Modbus] 已解除报警 {alarm_type}")
         
         return success
+    
+    def send_coal_quantity(self, coal_percentage):
+        """
+        发送煤量数据（连续数据，非报警）
+        
+        Args:
+            coal_percentage (float): 煤量百分比 (0.0-100.0)
+            
+        Returns:
+            bool: 操作是否成功
+        """
+        if "煤量报警" not in self.alarm_register_addresses:
+            log.warning("[Modbus警告] 未找到煤量寄存器地址")
+            return False
+            
+        register_address = self.alarm_register_addresses["煤量报警"]
+        value = int(coal_percentage)
+        value = max(0, min(value, 65535))
+        
+        log.info(f"[Modbus] 发送煤量数据: {coal_percentage:.1f}% -> 寄存器{register_address + 40001}")
+        return self.write_register(register_address, value)
     
     def clear_all_alarms(self):
         """清除所有报警"""
         all_success = True
         
         for alarm_type in self.alarm_states.keys():
-            if self.alarm_states[alarm_type]:
+            if alarm_type != "煤量报警" and self.alarm_states[alarm_type]:  # 不清除煤量数据
                 success = self.send_alarm(alarm_type, 0.0, False)
                 all_success = all_success and success
                 
@@ -278,6 +332,75 @@ class ModbusClient:
             
         return all_success
     
+    def get_alarm_enable_status(self):
+        """
+        获取报警使能寄存器状态
+        
+        Returns:
+            dict: 检测配置状态，格式：{"大块检测": True/False, ...}
+                 如果读取失败返回None
+        """
+        value = self.read_register(self.alarm_enable_register)
+        if value is None:
+            return None
+        
+        status = {
+            "大块检测": bool(value & self.DETECT_LARGE_CHUNK),
+            "异物检测": bool(value & self.DETECT_FOREIGN_OBJECT),
+            "人员越界检测": bool(value & self.DETECT_PERSONNEL),
+            "跑偏检测": bool(value & self.DETECT_DEVIATION)
+        }
+        return status
+
+    def check_detection_change(self):
+        """
+        检查报警使能寄存器是否有变化
+        
+        Returns:
+            dict: 如果有变化返回新的配置，无变化返回None
+        """
+        current_time = time.time()
+        # 限制检查频率，避免频繁读取
+        if current_time - self.last_check_time < 1.0:
+            return None
+            
+        current_config = self.get_alarm_enable_status()
+        if current_config is None:
+            return None
+            
+        if self.last_config is None or current_config != self.last_config:
+            old_config = self.last_config
+            self.last_config = current_config
+            self.last_check_time = current_time
+            
+            # 输出变化详情
+            if old_config:
+                log.info("[Modbus] 检测配置已更新：")
+                for key, new_value in current_config.items():
+                    if old_config.get(key) != new_value:
+                        state = "启用" if new_value else "禁用"
+                        log.info(f"  - {key}: {state}")
+            
+            return current_config
+        
+        return None
+
+    def is_detection_enabled(self, bit_mask):
+        """
+        检查指定检测类型是否启用
+        
+        Args:
+            bit_mask (int): 位掩码值
+            
+        Returns:
+            bool: 如果该检测类型启用返回True，否则返回False
+        """
+        value = self.read_register(self.alarm_enable_register)
+        if value is None:
+            return True  # 默认启用所有检测
+        
+        return bool(value & bit_mask)
+
     def monitor_registers(self):
         """监控所有寄存器，可用于调试"""
         if not self.reconnect_if_needed():
