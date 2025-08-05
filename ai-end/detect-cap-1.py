@@ -881,7 +881,7 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
 
 def _create_alarm_event(self, cls, confidence, frame, event_counter, event_queue):
     _, buffer = cv2.imencode('.jpg', frame)
-    image_base64 = base64.b64encode(buffer).decode('utf-8')
+    image_base64 = base64.b64encode(buffer.tobytes()).decode('utf-8')
     
     event = {
         "eventID": event_counter,
