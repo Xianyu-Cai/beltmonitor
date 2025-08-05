@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频尺寸测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .test-container {
+            background: #fff;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .video-box {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            max-width: 100%;
+            max-height: 100%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid red;
+        }
+        .video-js {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border: 1px solid blue;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 10px;
+            height: 60vh;
+            padding: 10px;
+            background: #ddd;
+        }
+        .debug-info {
+            font-family: monospace;
+            background: #f8f8f8;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>视频容器尺寸调试工具</h1>
+    
+    <div class="test-container">
+        <h2>测试1：单视频播放器</h2>
+        <div style="width: 400px; height: 300px; background: #eee;">
+            <div class="video-box" id="test1">
+                <video id="test-video" class="video-js" controls>
+                    <source src="http://localhost:2001/hls_output/camera_1/output.m3u8" type="application/x-mpegURL">
+                </video>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>测试2：网格布局</h2>
+        <div class="grid-container">
+            <div class="video-box">
+                <div style="width: 100%; height: 100%; background: linear-gradient(45deg, #ff0000, #0000ff); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">16:9</div>
+            </div>
+            <div class="video-box">
+                <div style="width: 100%; height: 100%; background: linear-gradient(45deg, #00ff00, #0000ff); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">16:9</div>
+            </div>
+            <div class="video-box">
+                <div style="width: 100%; height: 100%; background: linear-gradient(45deg, #ff00ff, #0000ff); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">16:9</div>
+            </div>
+            <div class="video-box">
+                <div style="width: 100%; height: 100%; background: linear-gradient(45deg, #ffff00, #0000ff); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">16:9</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>调试信息</h2>
+        <div class="debug-info" id="debug-info">
+            等待页面加载...
+        </div>
+        <button onclick="updateDebugInfo()">刷新调试信息</button>
+    </div>
+
+    <script src="https://vjs.zencdn.net/8.0.4/video.min.js"></script>
+    <script>
+        function updateDebugInfo() {
+            const debugDiv = document.getElementById('debug-info');
+            const test1 = document.getElementById('test1');
+            const testVideo = document.getElementById('test-video');
+            
+            let info = '';
+            
+            if (test1) {
+                const rect = test1.getBoundingClientRect();
+                info += `视频容器尺寸: ${rect.width}x${rect.height}\n`;
+                info += `计算比例: ${(rect.width/rect.height).toFixed(2)} (目标: 1.78)\n`;
+            }
+            
+            if (testVideo && testVideo.videoWidth) {
+                info += `视频实际尺寸: ${testVideo.videoWidth}x${testVideo.videoHeight}\n`;
+                info += `视频比例: ${(testVideo.videoWidth/testVideo.videoHeight).toFixed(2)}\n`;
+            }
+            
+            // 检查CSS计算值
+            const computedStyle = window.getComputedStyle(test1);
+            info += `CSS宽度: ${computedStyle.width}\n`;
+            info += `CSS高度: ${computedStyle.height}\n`;
+            info += `aspect-ratio: ${computedStyle.aspectRatio}\n`;
+            info += `object-fit: ${window.getComputedStyle(testVideo).objectFit}\n`;
+            
+            debugDiv.textContent = info;
+        }
+
+        // 页面加载后更新信息
+        window.addEventListener('load', () => {
+            setTimeout(updateDebugInfo, 1000);
+            
+            // 初始化视频播放器（如果有有效URL）
+            if (document.getElementById('test-video').src) {
+                const player = videojs('test-video');
+                player.ready(() => {
+                    setTimeout(updateDebugInfo, 2000);
+                });
+            }
+        });
+
+        // 窗口大小改变时更新
+        window.addEventListener('resize', updateDebugInfo);
+    </script>
+</body>
+</html>

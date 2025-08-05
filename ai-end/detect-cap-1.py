@@ -233,25 +233,70 @@ def generate_hls_stream(camera_id, frame):
     # 确保摄像头HLS目录存在
     os.makedirs(hls_path, exist_ok=True)
     
-    # 为该摄像头设置FFmpeg命令
-    ffmpeg_cmd = [
-        'ffmpeg',
-        '-y',  # 覆盖已存在的文件
-        '-f', 'rawvideo',
-        '-vcodec', 'rawvideo',
-        '-pix_fmt', 'bgr24',
-        '-s', f"{frame.shape[1]}x{frame.shape[0]}",  # 宽x高
-        '-r', '25',  # 帧率
-        '-i', '-',  # 从stdin读取
-        '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-preset', 'ultrafast',
-        '-f', 'hls',
-        '-hls_time', '2',
-        '-hls_list_size', '5',
-        '-hls_flags', 'delete_segments',
-        f"{hls_path}/{m3u8_name}"
-    ]
+    # 统一输入输出尺寸为YOLO兼容尺寸
+    target_width = 640   # 统一宽度（640÷32=20，完美兼容）
+    target_height = 352  # YOLO兼容高度（352÷32=11，接近360）
+    
+    # 检测是否支持NVIDIA硬件编码
+    import subprocess
+    try:
+        subprocess.run(['ffmpeg', '-encoders'], capture_output=True, text=True)
+        has_nvenc = 'h264_nvenc' in subprocess.run(['ffmpeg', '-encoders'], capture_output=True, text=True).stdout
+    except:
+        has_nvenc = False
+    
+    if has_nvenc:
+        # NVIDIA GPU硬件编码 - 低延迟优化
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-pix_fmt', 'bgr24',
+            '-s', f"{target_width}x{target_height}",
+            '-r', '15',  # 统一15fps平衡性能和带宽
+            '-i', '-',
+            '-c:v', 'h264_nvenc',  # NVIDIA硬件编码
+            '-preset', 'llhp',     # 低延迟高性能
+            '-tune', 'zerolatency', # 零延迟调优
+            '-rc', 'cbr',          # 固定码率
+            '-b:v', '800k',        # 800kbps码率
+            '-maxrate', '1M',      # 最大1Mbps
+            '-bufsize', '800k',    # 缓冲区优化
+            '-g', '30',            # GOP大小
+            '-pix_fmt', 'yuv420p',
+            '-f', 'hls',
+            '-hls_time', '1',      # 1秒分片（原来是2秒）
+            '-hls_list_size', '3',  # 只保留3个分片
+            '-hls_flags', 'delete_segments+append_list',
+            '-hls_playlist_type', 'event',
+            '-hls_segment_filename', f"{hls_path}/{camera_id}_%03d.ts",
+            f"{hls_path}/{m3u8_name}"
+        ]
+    else:
+        # CPU优化编码
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-pix_fmt', 'bgr24',
+            '-s', f"{target_width}x{target_height}",
+            '-r', '15',
+            '-i', '-',
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-tune', 'zerolatency',
+            '-crf', '25',  # 优化CRF值
+            '-maxrate', '600k',
+            '-bufsize', '600k',
+            '-g', '30',
+            '-pix_fmt', 'yuv420p',
+            '-f', 'hls',
+            '-hls_time', '1',
+            '-hls_list_size', '3',
+            '-hls_flags', 'delete_segments',
+            '-hls_segment_filename', f"{hls_path}/{camera_id}_%03d.ts",
+            f"{hls_path}/{m3u8_name}"
+        ]
     
     # 使用subprocess处理视频帧并创建HLS流
     try:
@@ -472,7 +517,7 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
     original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25
     
-    # 设置目标分辨率
+    # 设置目标分辨率 - 确保精确的16:9比例
     target_width = 800
     target_height = 450
     
@@ -486,7 +531,7 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
     
     print(f"[视频处理] 缩放比例: X={scale_x:.3f}, Y={scale_y:.3f}, 统一比例={scale_factor:.3f}")
     
-    # 启动ffmpeg进程，使用目标分辨率
+    # 启动ffmpeg进程，使用目标分辨率 - 确保16:9比例
     ffmpeg_process, hls_url = start_ffmpeg(output_dir, output_filename, target_width, target_height, fps, camera_id, hls_server_actual_port)
     
     # 如果提供了摄像头ID，则更新数据库中的HLS流地址
@@ -581,7 +626,8 @@ def predict_realtime(model_path, rtsp_url, img_size, output_dir, output_filename
             # 只在满足时间间隔时进行检测
             if should_detect:
                 # 执行检测（只检测当前启用的类别）
-                results = model.predict(source=frame, imgsz=img_size, conf=conf, classes=working_class_ids, save=False)
+                # 使用统一的640×352尺寸避免YOLO警告
+                results = model.predict(source=frame, imgsz=[640,352], conf=conf, classes=working_class_ids, save=False)
                 
                 # 发送检测结果到WebSocket（非阻塞）
                 if camera_id is not None:

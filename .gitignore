@@ -1,5 +1,5 @@
 # Node.js 忽略规则
-
+alarm*.jpg
 # node_modules 目录，包含所有安装的依赖
 node_modules/
 

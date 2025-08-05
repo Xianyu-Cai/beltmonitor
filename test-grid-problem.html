@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网格布局问题分析</title>
+    <style>
+        body {
+            margin: 0;
+            background: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        .container {
+            height: 100vh;
+            padding: 8px;
+            box-sizing: border-box;
+            background: #333;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-panel {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            margin-bottom: 10px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .grid-container {
+            display: grid;
+            gap: 4px;
+            flex: 1;
+            background: #444;
+            border: 1px solid #666;
+        }
+        
+        .video-box {
+            background: #000;
+            border: 1px solid #888;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .perfect-16-9 {
+            background: rgba(255, 0, 0, 0.3);
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 450px;
+            border: 2px solid red;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            z-index: 1000;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        button {
+            margin: 2px;
+            padding: 5px 10px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #888;
+        }
+        
+        button.active {
+            background: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info-panel" id="info">
+            等待测量...
+        </div>
+        
+        <div class="grid-container" id="grid">
+            <!-- 动态生成 -->
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="setLayout(1, 1)">1×1</button>
+        <button onclick="setLayout(2, 2)">2×2</button>
+        <button onclick="setLayout(3, 3)">3×3</button>
+        <button onclick="setLayout(4, 4)">4×4</button>
+        <button onclick="setLayout(4, 2)">4×2</button>
+        <button onclick="setLayout(2, 4)">2×4</button>
+        <button onclick="toggleReference()">参考线</button>
+        <button onclick="updateInfo()">更新信息</button>
+    </div>
+
+    <script>
+        let currentCols = 4;
+        let currentRows = 4;
+        let referenceVisible = false;
+        
+        function setLayout(cols, rows) {
+            currentCols = cols;
+            currentRows = rows;
+            renderGrid();
+            updateInfo();
+        }
+        
+        function renderGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            grid.style.gridTemplateColumns = `repeat(${currentCols}, 1fr)`;
+            grid.style.gridTemplateRows = `repeat(${currentRows}, 1fr)`;
+            
+            const total = currentCols * currentRows;
+            for (let i = 0; i < total; i++) {
+                const box = document.createElement('div');
+                box.className = 'video-box';
+                box.innerHTML = `${i + 1}`;
+                grid.appendChild(box);
+            }
+        }
+        
+        function updateInfo() {
+            const container = document.querySelector('.container');
+            const grid = document.getElementById('grid');
+            const cells = document.querySelectorAll('.video-box');
+            
+            if (cells.length === 0) return;
+            
+            // 获取容器尺寸
+            const containerRect = container.getBoundingClientRect();
+            const gridRect = grid.getBoundingClientRect();
+            const cellRect = cells[0].getBoundingClientRect();
+            
+            // 计算理论16:9尺寸
+            const containerAspect = containerRect.width / containerRect.height;
+            const cellAspect = cellRect.width / cellRect.height;
+            
+            // 计算每个单元格的理论16:9高度
+            const idealHeight = cellRect.width * (9/16);
+            const heightDiff = cellRect.height - idealHeight;
+            
+            const info = document.getElementById('info');
+            info.innerHTML = `
+                容器: ${Math.round(containerRect.width)}×${Math.round(containerRect.height)} (比例: ${containerAspect.toFixed(3)})<br>
+                网格: ${Math.round(gridRect.width)}×${Math.round(gridRect.height)}<br>
+                单元格: ${Math.round(cellRect.width)}×${Math.round(cellRect.height)} (比例: ${cellAspect.toFixed(3)})<br>
+                理论16:9高度: ${Math.round(idealHeight)}px<br>
+                高度差: ${Math.round(heightDiff)}px (${heightDiff > 0 ? '多出' : '缺少'})<br>
+                布局: ${currentCols}×${currentRows}<br>
+                建议: ${getRecommendation(containerAspect, currentCols, currentRows)}
+            `;
+        }
+        
+        function getRecommendation(containerAspect, cols, rows) {
+            const cellAspect = (containerAspect * rows) / cols;
+            const idealCellAspect = 16/9;
+            const ratio = cellAspect / idealCellAspect;
+            
+            if (Math.abs(ratio - 1) < 0.05) {
+                return '✅ 完美匹配';
+            } else if (ratio > 1) {
+                return `⚠️ 单元格过宽，建议${rows}行${cols}列 → ${rows}行${Math.round(cols * ratio)}列`;
+            } else {
+                return `⚠️ 单元格过窄，建议${rows}行${cols}列 → ${Math.round(rows / ratio)}行${cols}列`;
+            }
+        }
+        
+        function toggleReference() {
+            referenceVisible = !referenceVisible;
+            let ref = document.getElementById('reference');
+            
+            if (referenceVisible) {
+                if (!ref) {
+                    ref = document.createElement('div');
+                    ref.id = 'reference';
+                    ref.className = 'perfect-16-9';
+                    ref.innerHTML = '精确800×450';
+                    document.body.appendChild(ref);
+                }
+                ref.style.display = 'flex';
+            } else {
+                if (ref) ref.style.display = 'none';
+            }
+        }
+        
+        // 初始化
+        renderGrid();
+        updateInfo();
+        
+        window.addEventListener('resize', updateInfo);
+        setInterval(updateInfo, 2000);
+    </script>
+</body>
+</html>

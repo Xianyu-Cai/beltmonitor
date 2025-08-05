@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精确对齐调试</title>
+    <style>
+        body {
+            margin: 0;
+            background: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        
+        .debug-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 4px;
+            height: 100vh;
+            padding: 8px;
+            box-sizing: border-box;
+            background: #333;
+        }
+        
+        .video-cell {
+            background: #000;
+            position: relative;
+            border: 1px solid #666;
+            /* 精确16:9比例 */
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .video-js {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+        
+        .debug-overlay {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 1000;
+        }
+        
+        .test-content {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #ff0000 25%, #00ff00 25%, #00ff00 50%, #0000ff 50%, #0000ff 75%, #ffff00 75%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .exact-16-9 {
+            background: #000;
+            width: 800px;
+            height: 450px;
+            border: 2px solid red;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 2000;
+        }
+        
+        button {
+            margin: 2px;
+            padding: 5px 10px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-container" id="grid">
+        <div class="video-cell" data-index="1">
+            <div class="debug-overlay" id="info-1">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="2">
+            <div class="debug-overlay" id="info-2">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="3">
+            <div class="debug-overlay" id="info-3">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="4">
+            <div class="debug-overlay" id="info-4">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="5">
+            <div class="debug-overlay" id="info-5">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="6">
+            <div class="debug-overlay" id="info-6">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="7">
+            <div class="debug-overlay" id="info-7">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+        <div class="video-cell" data-index="8">
+            <div class="debug-overlay" id="info-8">测量中...</div>
+            <div class="test-content">16:9</div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button onclick="showExact169()">显示精确800×450</button>
+        <button onclick="measureCells()">重新测量</button>
+        <button onclick="toggleBorders()">切换边框</button>
+    </div>
+
+    <script>
+        function measureCells() {
+            const cells = document.querySelectorAll('.video-cell');
+            cells.forEach((cell, index) => {
+                const rect = cell.getBoundingClientRect();
+                const ratio = (rect.width / rect.height).toFixed(3);
+                const targetRatio = (16/9).toFixed(3);
+                const deviation = Math.abs(ratio - targetRatio);
+                
+                const info = document.getElementById(`info-${index + 1}`);
+                info.innerHTML = `
+                    尺寸: ${rect.width}×${rect.height}<br>
+                    比例: ${ratio}<br>
+                    目标: ${targetRatio}<br>
+                    偏差: ${deviation.toFixed(3)}<br>
+                    ${deviation < 0.01 ? '✅ 精确' : '❌ 偏差'}
+                `;
+            });
+        }
+        
+        function showExact169() {
+            const overlay = document.createElement('div');
+            overlay.className = 'exact-16-9';
+            overlay.innerHTML = '精确800×450<br>16:9比例';
+            overlay.onclick = () => overlay.remove();
+            document.body.appendChild(overlay);
+        }
+        
+        function toggleBorders() {
+            const cells = document.querySelectorAll('.video-cell');
+            cells.forEach(cell => {
+                cell.style.border = cell.style.border === 'none' ? '1px solid #666' : 'none';
+            });
+        }
+        
+        // 实时更新尺寸
+        function startMonitoring() {
+            measureCells();
+            setInterval(measureCells, 1000);
+        }
+        
+        // 页面加载完成后开始监控
+        window.addEventListener('load', startMonitoring);
+        window.addEventListener('resize', measureCells);
+    </script>
+</body>
+</html>

@@ -17,7 +17,7 @@ class ConfigManager:
         parser = argparse.ArgumentParser(description="YOLO Real-Time Detection with Alarm Reporting")
         parser.add_argument('--model', type=str, default='./best.pt', help="Path to the YOLO model (.pt file)")
         parser.add_argument('--source', type=str, help="Video source (e.g., RTSP URL)")
-        parser.add_argument('--img_size', type=int, default=[800,450], help="Input image size (default: 640)")
+        parser.add_argument('--img_size', type=int, nargs=2, default=[640,352], help="Input image size (default: [640,352])")
         parser.add_argument('--hls_dir', type=str, default='hls_output', help="Directory to save HLS files (default: hls_output)")
         parser.add_argument('--hls_filename', type=str, default='output.m3u8', help="HLS playlist filename (default: output.m3u8)")
         parser.add_argument('--class_id', type=str, default='', help="Class IDs to detect, e.g., '0,1' or leave empty for all classes")
@@ -25,7 +25,7 @@ class ConfigManager:
         parser.add_argument('--cameraid', type=int, help="Camera ID for event reporting")
         parser.add_argument('--base_url', type=str, default="http://localhost:8080", help="Base URL for API endpoints")
         parser.add_argument('--cooldown', type=int, default=30, help="Event reporting cooldown period in minutes (default: 30)")
-        parser.add_argument('--detection_interval', type=float, default=1.0, help="Detection interval in seconds (default: 1.0)")
+        parser.add_argument('--detection_interval', type=float, default=1.0, help="Detection interval in seconds (default: 1.0 for balanced performance)")
         
         args = parser.parse_args()
         self.camera_id = args.cameraid

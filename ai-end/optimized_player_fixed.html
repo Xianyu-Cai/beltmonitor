@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>优化视频播放器 - 低延迟版</title>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif; 
+            background: #000;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #111;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .quality-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.active {
+            background: #28a745;
+        }
+        .info {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 低延迟视频播放器</h1>
+        
+        <div class="video-container">
+            <video id="video" controls autoplay muted playsinline>
+                您的浏览器不支持视频播放
+            </video>
+            <div class="stats">
+                <div>延迟: <span id="latency">-</span>ms</div>
+                <div>缓冲: <span id="buffer">-</span>s</div>
+                <div>码率: <span id="bitrate">-</span>kbps</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="quality-buttons">
+                <button onclick="setQuality('auto')" class="active">自动</button>
+                <button onclick="setQuality('low')">流畅 (400kbps)</button>
+                <button onclick="setQuality('medium')">标清 (800kbps)</button>
+                <button onclick="setQuality('high')">高清 (1500kbps)</button>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>📊 播放状态</h3>
+            <div id="status">正在初始化...</div>
+        </div>
+    </div>
+
+    <script>
+        class OptimizedPlayer {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.hls = null;
+                this.currentQuality = 'auto';
+                this.stats = {
+                    latency: 0,
+                    buffer: 0,
+                    bitrate: 0
+                };
+                
+                this.init();
+            }
+
+            init() {
+                // HLS配置 - 低延迟优化
+                this.hlsConfig = {
+                    lowLatencyMode: true,
+                    maxBufferLength: 2,
+                    maxMaxBufferLength: 4,
+                    maxBufferSize: 30000000,
+                    liveBackBufferLength: 0,
+                    liveSyncDurationCount: 1,
+                    liveMaxLatencyDurationCount: 2,
+                    abrEwmaFastLive: 3.0,
+                    abrEwmaSlowLive: 9.0,
+                    startLevel: -1,
+                    debug: false,
+                    enableWorker: true,
+                    autoStartLoad: true,
+                    capLevelToPlayerSize: true
+                };
+
+                this.setupVideo();
+                this.startMonitoring();
+            }
+
+            setupVideo() {
+                // 动态获取摄像头端口
+                const urlParams = new URLSearchParams(window.location.search);
+                const cameraId = urlParams.get('camera') || '1';
+                const videoSrc = `http://localhost:${2000 + parseInt(cameraId)}/hls_output/camera_${cameraId}/output.m3u8`;
+
+                if (Hls.isSupported()) {
+                    this.hls = new Hls(this.hlsConfig);
+                    this.hls.loadSource(videoSrc);
+                    this.hls.attachMedia(this.video);
+                    
+                    this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        this.updateStatus('✅ 视频加载成功，开始播放');
+                        this.video.play();
+                    });
+                    
+                    this.hls.on(Hls.Events.ERROR, (event, data) => {
+                        if (data.fatal) {
+                            this.handleError(data);
+                        }
+                    });
+                    
+                } else if (this.video.canPlayType('application/vnd.apple.mpegurl')) {
+                    this.video.src = videoSrc;
+                    this.video.addEventListener('loadedmetadata', () => {
+                        this.updateStatus('✅ 原生HLS支持，开始播放');
+                        this.video.play();
+                    });
+                } else {
+                    this.updateStatus('❌ 浏览器不支持HLS');
+                }
+            }
+
+            handleError(data) {
+                console.error('HLS错误:', data);
+                switch(data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        this.updateStatus('🔄 网络错误，尝试重新连接...');
+                        this.hls.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        this.updateStatus('🔄 媒体错误，尝试恢复...');
+                        this.hls.recoverMediaError();
+                        break;
+                    default:
+                        this.updateStatus('❌ 播放错误，请刷新页面');
+                        this.hls.destroy();
+                        break;
+                }
+            }
+
+            setQuality(quality) {
+                this.currentQuality = quality;
+                
+                // 更新按钮状态
+                document.querySelectorAll('.quality-buttons button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+
+                if (quality !== 'auto' && this.hls) {
+                    const levels = this.hls.levels;
+                    // 这里需要实际的码率级别
+                    console.log('切换到画质:', quality);
+                }
+            }
+
+            startMonitoring() {
+                setInterval(() => {
+                    this.updateStats();
+                }, 1000);
+            }
+
+            updateStats() {
+                if (!this.hls) return;
+
+                try {
+                    // 获取缓冲信息
+                    if (this.video.buffered.length > 0) {
+                        const buffered = this.video.buffered.end(0) - this.video.buffered.start(0);
+                        this.stats.buffer = buffered;
+                        document.getElementById('buffer').textContent = buffered.toFixed(1);
+                    }
+
+                    // 获取当前码率
+                    if (this.hls.levels && this.hls.levels[this.hls.currentLevel]) {
+                        this.stats.bitrate = this.hls.levels[this.hls.currentLevel].bitrate / 1000;
+                        document.getElementById('bitrate').textContent = Math.round(this.stats.bitrate);
+                    }
+
+                    // 计算延迟（简化版）
+                    const currentTime = this.video.currentTime;
+                    const bufferedEnd = this.video.buffered.length > 0 ? this.video.buffered.end(0) : 0;
+                    this.stats.latency = Math.max(0, (bufferedEnd - currentTime) * 1000);
+                    document.getElementById('latency').textContent = Math.round(this.stats.latency);
+
+                    this.updateStatus(`🎬 播放中 | 延迟: ${Math.round(this.stats.latency)}ms | 缓冲: ${this.stats.buffer.toFixed(1)}s`);
+                } catch (error) {
+                    console.warn('更新统计信息失败:', error);
+                }
+            }
+
+            updateStatus(message) {
+                document.getElementById('status').textContent = message;
+            }
+        }
+
+        // 初始化播放器
+        window.addEventListener('DOMContentLoaded', () => {
+            new OptimizedPlayer();
+        });
+    </script>
+</body>
+</html>

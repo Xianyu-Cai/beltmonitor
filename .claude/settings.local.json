@@ -2,7 +2,30 @@
   "permissions": {
     "allow": [
       "Bash(python:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(npm install)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm install:*)",
+      "Bash(cnpm install)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(cnpm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(node:*)",
+      "Bash(timeout:*)",
+      "Bash(npm run start)",
+      "Bash(npm run:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(wmic:*)",
+      "Bash(powershell:*)",
+      "Bash(find:*)",
+      "Bash(ffprobe:*)",
+      "Bash(grep:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(.fix_stuttering_simple.bat)"
     ],
     "deny": []
   }
